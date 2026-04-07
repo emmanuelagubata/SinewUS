@@ -8,7 +8,7 @@ import SwiftUI
 struct SinewUS_IOSApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            MainTabView()
                 .preferredColorScheme(.dark)
         }
     }

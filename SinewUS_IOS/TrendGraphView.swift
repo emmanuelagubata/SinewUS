@@ -1,14 +1,17 @@
 // ============================================================
-// TrendGraphView.swift — Simple real-time line graph
-// Shows the last N data points as a trend line
+// TrendGraphView.swift — Real-time line graph with target
+// and zone overlay, styled to match the dashboard
 // ============================================================
 
 import SwiftUI
 
 struct TrendGraphView: View {
     let dataPoints: [DataPoint]
+    var targetForce: Double = 85
+    var accentColor: Color = .cyan
+    var targetColor: Color = .yellow.opacity(0.7)
+    var zoneColor: Color = .green.opacity(0.3)
 
-    // How many points to show on screen at once
     private let visiblePoints = 200
 
     var body: some View {
@@ -18,56 +21,94 @@ struct TrendGraphView: View {
             let height = geometry.size.height
 
             if points.count < 2 {
-                // Not enough data yet
+                // Empty state
                 VStack {
                     Spacer()
-                    Text("Waiting for data...")
-                        .font(.caption)
-                        .foregroundColor(.gray)
+                    HStack(spacing: 8) {
+                        Image(systemName: "waveform.path.ecg")
+                            .foregroundColor(.gray.opacity(0.4))
+                        Text("Waiting for data...")
+                            .font(.system(size: 13))
+                            .foregroundColor(.gray.opacity(0.5))
+                    }
                     Spacer()
                 }
                 .frame(maxWidth: .infinity)
             } else {
-                let (minForce, maxForce) = forceRange(points)
-                let range = max(maxForce - minForce, 1.0) // avoid division by zero
+                let (minF, maxF) = forceRange(points)
+                let range = max(maxF - minF, 1.0)
 
-                ZStack(alignment: .topLeading) {
-                    // Y-axis labels
-                    VStack {
-                        Text(String(format: "%.0f", maxForce))
-                            .font(.system(size: 9))
-                            .foregroundColor(.gray)
-                        Spacer()
-                        Text(String(format: "%.0f", minForce))
-                            .font(.system(size: 9))
-                            .foregroundColor(.gray)
-                    }
-                    .frame(width: 40, height: height)
+                ZStack {
+                    // Zone band (±10% of target)
+                    let zoneLow = normalize(targetForce * 0.9, min: minF, range: range, height: height)
+                    let zoneHigh = normalize(targetForce * 1.1, min: minF, range: range, height: height)
+                    Rectangle()
+                        .fill(zoneColor)
+                        .frame(height: max(zoneLow - zoneHigh, 0))
+                        .offset(y: zoneHigh - height / 2 + (zoneLow - zoneHigh) / 2)
 
-                    // Line graph
+                    // Target line (dashed)
+                    let targetY = normalize(targetForce, min: minF, range: range, height: height)
                     Path { path in
-                        let graphWidth = width - 44
-                        let graphX: CGFloat = 44
-
-                        for (index, point) in points.enumerated() {
-                            let x = graphX + (CGFloat(index) / CGFloat(points.count - 1)) * graphWidth
-                            let normalized = (point.force - minForce) / range
-                            let y = height - (CGFloat(normalized) * (height - 8)) - 4
-
-                            if index == 0 {
-                                path.move(to: CGPoint(x: x, y: y))
-                            } else {
-                                path.addLine(to: CGPoint(x: x, y: y))
-                            }
-                        }
+                        path.move(to: CGPoint(x: 0, y: targetY))
+                        path.addLine(to: CGPoint(x: width, y: targetY))
                     }
-                    .stroke(Color.blue, lineWidth: 2)
+                    .stroke(targetColor, style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+
+                    // Data line with gradient
+                    let linePath = buildLinePath(points: points, width: width, height: height, minF: minF, range: range)
+
+                    // Glow behind line
+                    linePath
+                        .stroke(accentColor.opacity(0.3), lineWidth: 4)
+                        .blur(radius: 4)
+
+                    // Main line
+                    linePath
+                        .stroke(
+                            LinearGradient(
+                                colors: [accentColor, accentColor.opacity(0.7)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ),
+                            lineWidth: 2.5
+                        )
+
+                    // Current value dot
+                    if let last = points.last {
+                        let x = width
+                        let y = normalize(last.force, min: minF, range: range, height: height)
+                        Circle()
+                            .fill(accentColor)
+                            .frame(width: 8, height: 8)
+                            .shadow(color: accentColor.opacity(0.8), radius: 6)
+                            .position(x: x - 4, y: y)
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+        }
+    }
+
+    private func buildLinePath(points: [DataPoint], width: CGFloat, height: CGFloat, minF: Double, range: Double) -> Path {
+        Path { path in
+            for (index, point) in points.enumerated() {
+                let x = (CGFloat(index) / CGFloat(points.count - 1)) * width
+                let y = normalize(point.force, min: minF, range: range, height: height)
+                if index == 0 {
+                    path.move(to: CGPoint(x: x, y: y))
+                } else {
+                    path.addLine(to: CGPoint(x: x, y: y))
                 }
             }
         }
     }
 
-    // Get the most recent points to display
+    private func normalize(_ value: Double, min minF: Double, range: Double, height: CGFloat) -> CGFloat {
+        let normalized = (value - minF) / range
+        return height - (CGFloat(normalized) * (height - 8)) - 4
+    }
+
     private var recentPoints: [DataPoint] {
         if dataPoints.count <= visiblePoints {
             return dataPoints
@@ -75,12 +116,14 @@ struct TrendGraphView: View {
         return Array(dataPoints.suffix(visiblePoints))
     }
 
-    // Calculate min/max with a small padding
     private func forceRange(_ points: [DataPoint]) -> (Double, Double) {
         let forces = points.map(\.force)
-        let min = forces.min() ?? 0
-        let max = forces.max() ?? 1
-        let padding = (max - min) * 0.1
-        return (min - padding, max + padding)
+        var lo = forces.min() ?? 0
+        var hi = forces.max() ?? 100
+        // Always include target in the range
+        lo = min(lo, targetForce * 0.8)
+        hi = max(hi, targetForce * 1.2)
+        let padding = (hi - lo) * 0.1
+        return (lo - padding, hi + padding)
     }
 }

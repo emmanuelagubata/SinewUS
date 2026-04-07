@@ -1,11 +1,10 @@
 // ============================================================
-// SessionManager.swift — Tracks session state and collects
-// data points for the trend graph
+// SessionManager.swift — Tracks session state, target force,
+// selected body area, and collects data points
 // ============================================================
 
 import Foundation
 
-// A single recorded data point
 struct DataPoint: Identifiable {
     let id = UUID()
     let timestamp: Date
@@ -16,29 +15,36 @@ class SessionManager: ObservableObject {
 
     @Published var isRecording = false
     @Published var dataPoints: [DataPoint] = []
+    @Published var targetForce: Double = 85 {
+        didSet { updateMaxScale() }
+    }
+    @Published var selectedArea: String = "Achilles/Calf"
+    @Published var maxForceScale: Double = 100
 
-    // Max points to keep on the graph (last 5 minutes at ~10Hz)
+    static let targetAreas = ["Achilles/Calf", "Knee", "Shoulder", "Elbow"]
+
+    private func updateMaxScale() {
+        // Scale the bar so target sits around 80% of the way
+        maxForceScale = max(ceil(targetForce * 1.25 / 10) * 10, 50)
+    }
+
     private let maxPoints = 3000
 
-    /// Start recording session data
     func start() {
         dataPoints = []
         isRecording = true
     }
 
-    /// Stop recording session data
     func stop() {
         isRecording = false
     }
 
-    /// Add a new data point (called from BLEManager.onDataPoint)
     func addPoint(_ force: Double) {
         guard isRecording else { return }
 
         let point = DataPoint(timestamp: Date(), force: force)
         dataPoints.append(point)
 
-        // Trim old points to keep memory bounded
         if dataPoints.count > maxPoints {
             dataPoints.removeFirst(dataPoints.count - maxPoints)
         }

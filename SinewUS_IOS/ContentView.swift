@@ -1,6 +1,6 @@
 // ============================================================
 // ContentView.swift — Root view that switches between
-// Connect and Live Session screens
+// Connect (Page 1) and Live Dashboard (Page 2)
 // ============================================================
 
 import SwiftUI
@@ -11,21 +11,29 @@ struct ContentView: View {
     @State private var showLiveSession = false
 
     var body: some View {
-        if showLiveSession {
-            LiveSessionView(
-                bleManager: bleManager,
-                sessionManager: sessionManager,
-                onDisconnect: {
-                    showLiveSession = false
-                }
-            )
-        } else {
-            ConnectView(
-                bleManager: bleManager,
-                onConnected: {
-                    showLiveSession = true
-                }
-            )
+        ZStack {
+            if showLiveSession {
+                LiveSessionView(
+                    bleManager: bleManager,
+                    sessionManager: sessionManager,
+                    onDisconnect: {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            showLiveSession = false
+                        }
+                    }
+                )
+                .transition(.move(edge: .trailing))
+            } else {
+                ConnectView(
+                    bleManager: bleManager,
+                    onConnected: {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            showLiveSession = true
+                        }
+                    }
+                )
+                .transition(.move(edge: .leading))
+            }
         }
     }
 }
