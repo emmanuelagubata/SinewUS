@@ -3,7 +3,7 @@
 // Must match the ESP32 firmware values exactly
 // ============================================================
 
-import CoreBluetooth
+import CoreBluetooth //Needed for the CBUUID type.
 
 struct BLEConstants {
     // Advertised device name from ESP32
@@ -15,6 +15,9 @@ struct BLEConstants {
     // BLE characteristic UUID (matches firmware/sinew_esp32.ino)
     static let characteristicUUID = CBUUID(string: "abcdef01-1234-5678-1234-56789abcdef0")
 
+    // BLE control characteristic — app writes "START" / "STOP" to control streaming
+    static let controlCharacteristicUUID = CBUUID(string: "abcdef02-1234-5678-1234-56789abcdef0")
+
     // Scan timeout in seconds
-    static let scanTimeout: TimeInterval = 10
+    static let scanTimeout: TimeInterval = 15
 }

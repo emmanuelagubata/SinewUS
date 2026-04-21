@@ -9,10 +9,8 @@ struct LiveSessionView: View {
     @ObservedObject var sessionManager: SessionManager
     var onDisconnect: () -> Void
 
-    @State private var showTargetInput = false
-    @State private var targetText = ""
+    @State private var showFullscreenGraph = false
 
-    // Theme colors
     private let bg = Color(red: 0.06, green: 0.08, blue: 0.14)
     private let cardBg = Color(red: 0.10, green: 0.12, blue: 0.20)
     private let accentTeal = Color(red: 0.15, green: 0.85, blue: 0.75)
@@ -23,38 +21,29 @@ struct LiveSessionView: View {
             bg.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // ── Top bar ──
                 topBar
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 16) {
-                        // ── Force reading card ──
                         forceCard
-
-                        // ── Trend graph card ──
                         graphCard
-
-                        // ── Target area card ──
                         targetAreaCard
-
-                        // ── Session button ──
                         sessionButton
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 16)
-                    .padding(.bottom, 32)
+                    .padding(.bottom, 100)
                 }
             }
+        }
+        .fullScreenCover(isPresented: $showFullscreenGraph) {
+            fullscreenGraphOverlay
         }
         .onAppear {
             bleManager.onDataPoint = { [weak sessionManager] value in
                 sessionManager?.addPoint(value)
-            }
-            // Auto-start recording
-            if !sessionManager.isRecording {
-                sessionManager.start()
             }
         }
         .onDisappear {
@@ -75,7 +64,6 @@ struct LiveSessionView: View {
                     .foregroundColor(.gray)
             }
             Spacer()
-            // Connection badge
             HStack(spacing: 6) {
                 Circle()
                     .fill(bleManager.connectionState == .connected ? accentGreen : .red)
@@ -87,97 +75,28 @@ struct LiveSessionView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(
-                Capsule()
-                    .fill(Color.white.opacity(0.06))
-            )
+            .background(Capsule().fill(Color.white.opacity(0.06)))
         }
     }
 
     // MARK: - Force Card
 
     private var forceCard: some View {
-        VStack(spacing: 12) {
-            // Big force number
+        VStack(spacing: 8) {
             HStack(alignment: .lastTextBaseline, spacing: 4) {
                 Text(String(format: "%.1f", bleManager.currentForce))
                     .font(.system(size: 64, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
                     .contentTransition(.numericText())
                     .animation(.easeOut(duration: 0.15), value: bleManager.currentForce)
-                Text("lbs")
+                Text("ADC")
                     .font(.system(size: 22, weight: .medium))
                     .foregroundColor(.gray)
                     .padding(.bottom, 6)
             }
-
-            // Progress bar
-            forceProgressBar
-
-            // Target label — tap to edit
-            HStack {
-                Text("0")
-                    .font(.system(size: 11))
-                    .foregroundColor(.gray)
-                Spacer()
-                Button(action: {
-                    targetText = "\(Int(sessionManager.targetForce))"
-                    showTargetInput = true
-                }) {
-                    HStack(spacing: 4) {
-                        Text("Target: \(Int(sessionManager.targetForce)) lbs")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(accentTeal)
-                        Image(systemName: "pencil")
-                            .font(.system(size: 10))
-                            .foregroundColor(accentTeal.opacity(0.7))
-                    }
-                }
-                Spacer()
-                Text("\(Int(sessionManager.maxForceScale))")
-                    .font(.system(size: 11))
-                    .foregroundColor(.gray)
-            }
         }
         .padding(20)
         .background(cardStyle)
-        .sheet(isPresented: $showTargetInput) {
-            targetInputSheet
-        }
-    }
-
-    private var forceProgressBar: some View {
-        GeometryReader { geo in
-            let maxForce = sessionManager.maxForceScale
-            let progress = min(bleManager.currentForce / maxForce, 1.0)
-            let targetProgress = min(sessionManager.targetForce / maxForce, 1.0)
-
-            ZStack(alignment: .leading) {
-                // Track
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.white.opacity(0.08))
-                    .frame(height: 12)
-
-                // Fill
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(
-                        LinearGradient(
-                            colors: [accentTeal, accentGreen],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .frame(width: max(geo.size.width * CGFloat(progress), 0), height: 12)
-                    .animation(.easeOut(duration: 0.15), value: progress)
-
-                // Target marker
-                Rectangle()
-                    .fill(Color.white.opacity(0.6))
-                    .frame(width: 2, height: 18)
-                    .offset(x: geo.size.width * CGFloat(targetProgress) - 1)
-            }
-        }
-        .frame(height: 18)
     }
 
     // MARK: - Graph Card
@@ -185,57 +104,50 @@ struct LiveSessionView: View {
     private var graphCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                // Legend
-                HStack(spacing: 16) {
-                    legendDot(color: accentTeal, label: "Current")
-                    legendDash(color: .yellow.opacity(0.7), label: "Target")
-                    legendDash(color: accentGreen.opacity(0.5), label: "Zone")
+                HStack(spacing: 4) {
+                    Circle().fill(accentTeal).frame(width: 6, height: 6)
+                    Text("Force (N)")
+                        .font(.system(size: 11))
+                        .foregroundColor(.gray)
                 }
                 Spacer()
+                if sessionManager.isRecording {
+                    HStack(spacing: 4) {
+                        Circle().fill(Color.red).frame(width: 6, height: 6)
+                        Text("Recording")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.red)
+                    }
+                }
                 Text("Live")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(accentGreen)
+
+                // Expand button
+                Button(action: { showFullscreenGraph = true }) {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.gray)
+                        .padding(6)
+                        .background(Circle().fill(Color.white.opacity(0.08)))
+                }
             }
 
             TrendGraphView(
                 dataPoints: sessionManager.dataPoints,
-                targetForce: sessionManager.targetForce,
-                accentColor: accentTeal,
-                targetColor: .yellow.opacity(0.7),
-                zoneColor: accentGreen.opacity(0.3)
+                accentColor: accentTeal
             )
-            .frame(height: 160)
+            .frame(height: 180)
+            .onTapGesture { showFullscreenGraph = true }
 
-            // Recording indicator
             if sessionManager.isRecording {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(Color.red)
-                        .frame(width: 6, height: 6)
-                    Text("\(sessionManager.dataPoints.count) data points")
-                        .font(.system(size: 11))
-                        .foregroundColor(.gray)
-                }
+                Text("\(sessionManager.dataPoints.count) data points")
+                    .font(.system(size: 11))
+                    .foregroundColor(.gray)
             }
         }
         .padding(20)
         .background(cardStyle)
-    }
-
-    private func legendDot(color: Color, label: String) -> some View {
-        HStack(spacing: 4) {
-            Circle().fill(color).frame(width: 6, height: 6)
-            Text(label).font(.system(size: 11)).foregroundColor(.gray)
-        }
-    }
-
-    private func legendDash(color: Color, label: String) -> some View {
-        HStack(spacing: 4) {
-            RoundedRectangle(cornerRadius: 1)
-                .fill(color)
-                .frame(width: 12, height: 2)
-            Text(label).font(.system(size: 11)).foregroundColor(.gray)
-        }
     }
 
     // MARK: - Target Area Card
@@ -256,9 +168,7 @@ struct LiveSessionView: View {
                 GridItem(.flexible(), spacing: 10)
             ], spacing: 10) {
                 ForEach(SessionManager.targetAreas, id: \.self) { area in
-                    Button(action: {
-                        sessionManager.selectedArea = area
-                    }) {
+                    Button(action: { sessionManager.selectedArea = area }) {
                         Text(area)
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(sessionManager.selectedArea == area ? .black : .white)
@@ -289,7 +199,10 @@ struct LiveSessionView: View {
     private var sessionButton: some View {
         VStack(spacing: 12) {
             if sessionManager.isRecording {
-                Button(action: { sessionManager.stop() }) {
+                Button(action: {
+                    bleManager.sendCommand("STOP")
+                    sessionManager.stop()
+                }) {
                     Text("Stop Session")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
@@ -299,7 +212,10 @@ struct LiveSessionView: View {
                         .cornerRadius(14)
                 }
             } else {
-                Button(action: { sessionManager.start() }) {
+                Button(action: {
+                    bleManager.sendCommand("START")
+                    sessionManager.start()
+                }) {
                     Text("Start Session")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
@@ -318,6 +234,7 @@ struct LiveSessionView: View {
             }
 
             Button(action: {
+                bleManager.sendCommand("STOP")
                 sessionManager.stop()
                 bleManager.disconnect()
                 onDisconnect()
@@ -329,78 +246,62 @@ struct LiveSessionView: View {
         }
     }
 
-    // MARK: - Target Input Sheet
+    // MARK: - Fullscreen Graph Overlay
 
-    private var targetInputSheet: some View {
+    private var fullscreenGraphOverlay: some View {
         ZStack {
             bg.ignoresSafeArea()
 
-            VStack(spacing: 24) {
-                Spacer().frame(height: 20)
-
-                Text("Set Target Weight")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(.white)
-
-                Text("Enter your target force in lbs")
-                    .font(.system(size: 14))
-                    .foregroundColor(.gray)
-
-                TextField("", text: $targetText)
-                    .font(.system(size: 36, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.center)
-                    .keyboardType(.numberPad)
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(cardBg)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14)
-                                    .stroke(accentTeal.opacity(0.4), lineWidth: 1)
-                            )
-                    )
-                    .padding(.horizontal, 48)
-
-                Text("lbs")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.gray)
-
-                Button(action: {
-                    if let value = Double(targetText), value > 0 {
-                        sessionManager.targetForce = value
+            VStack(spacing: 0) {
+                // Header bar
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Graph Detail")
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                        Text("Pinch to zoom, drag to pan, double-tap to reset")
+                            .font(.system(size: 11))
+                            .foregroundColor(.gray)
                     }
-                    showTargetInput = false
-                }) {
-                    Text("Set Target")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(
-                            LinearGradient(
-                                colors: [accentTeal, accentGreen],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .cornerRadius(14)
-                }
-                .padding(.horizontal, 32)
+                    Spacer()
 
-                Button("Cancel") {
-                    showTargetInput = false
-                }
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.gray)
+                    // Live ADC readout
+                    Text(String(format: "%.0f", bleManager.currentForce))
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundColor(accentTeal)
+                        .padding(.trailing, 8)
 
-                Spacer()
+                    Button(action: { showFullscreenGraph = false }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundColor(.gray)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 12)
+
+                // Recording indicator
+                if sessionManager.isRecording {
+                    HStack(spacing: 6) {
+                        Circle().fill(Color.red).frame(width: 6, height: 6)
+                        Text("Recording — \(sessionManager.dataPoints.count) pts")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.red)
+                    }
+                    .padding(.bottom, 8)
+                }
+
+                // Full-size graph
+                TrendGraphView(
+                    dataPoints: sessionManager.dataPoints,
+                    accentColor: accentTeal
+                )
+                .padding(.horizontal, 16)
+                .padding(.bottom, 40)
             }
         }
-        .presentationDetents([.medium])
     }
-
-    // MARK: - Card Style
 
     private var cardStyle: some View {
         RoundedRectangle(cornerRadius: 18)
