@@ -1,10 +1,10 @@
-# SinewUS iOS App
+# StairBaar iOS App
 
 A real-time force monitoring app for isometric strength testing. Connects to a custom ESP32 microcontroller with a strain gauge amplifier over Bluetooth Low Energy (BLE) and displays live ADC readings.
 
 ## What We're Building
 
-SinewUS is a handheld device that measures how much force a muscle group can produce during an isometric (non-moving) contraction. The hardware is a strain gauge wired through an amplifier into an ESP32 microcontroller. This iOS app connects to the ESP32 over Bluetooth and graphs the readings in real time.
+StairBaar is a handheld device that measures how much force a muscle group can produce during an isometric (non-moving) contraction. The hardware is a strain gauge wired through an amplifier into an ESP32 microcontroller. This iOS app connects to the ESP32 over Bluetooth and graphs the readings in real time.
 
 ## Problems We Ran Into (April 19-20, 2026)
 
